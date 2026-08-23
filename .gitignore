@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+private_key.json
+pseudonym_map.json
+*.jsonl
+.DS_Store
+.venv/
+__pycache__/
+docs/cheatsheet.md
