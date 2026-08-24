@@ -33,6 +33,13 @@ def load_config(env_path: str | Path = ".env") -> Config:
     if missing:
         raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
 
+    org_url = values["OKTA_ORG_URL"].rstrip("/")
+    if not org_url.startswith("https://"):
+        raise RuntimeError(
+            "OKTA_ORG_URL must start with https:// — a bare hostname or "
+            "http:// URL will fail later with a confusing error."
+        )
+
     key_path = Path(values["OKTA_PRIVATE_KEY_PATH"]).expanduser()
     if not key_path.is_file():
         raise RuntimeError(f"Private key file not found: {key_path}")
@@ -41,7 +48,7 @@ def load_config(env_path: str | Path = ".env") -> Config:
         jwk = json.load(f)
 
     return Config(
-        org_url=values["OKTA_ORG_URL"].rstrip("/"),
+        org_url=org_url,
         client_id=values["OKTA_CLIENT_ID"],
         key_id=values["OKTA_KEY_ID"],
         private_key_jwk=jwk,

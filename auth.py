@@ -12,7 +12,7 @@ from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 from config import Config
 from dpop import DPoPKey
 
-DEFAULT_SCOPE = "okta.logs.read"
+DEFAULT_SCOPE = "okta.users.read okta.groups.read"
 CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 
 _EC_CURVE_TO_ALG = {"P-256": "ES256", "P-384": "ES384", "P-521": "ES512"}
