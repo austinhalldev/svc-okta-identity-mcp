@@ -14,9 +14,9 @@ project governs a different question: what an agent is permitted to *do*,
 namely tool scoping, read-only enforcement, and preventing reach into data
 the agent shouldn't have.
 
-Sessions: 22 August 2026 (scaffold, decisions 1-3), and
-23 August 2026 (MCP SDK v2 pin, Okta server investigation, journal
-edits).
+Sessions: 22 August 2026 (scaffold, decisions 1-3), 23 August 2026 (MCP
+SDK v2 pin, Okta server investigation, journal edits), and 24 August 2026
+(Okta app scoping, first tools, field allowlist).
 
 ---
 
@@ -236,3 +236,43 @@ is handled, and their answer to egress is to disclose the exposure
 rather than reduce it. Pseudonymization is still the wrong tool here,
 for the reason already recorded in entry 2: the identity is the answer,
 so the control is field minimization, not tokenization.
+
+### 6. Egress happens through paths you didn't design
+
+Two findings from the same session, both instances of the same lesson.
+
+**Finding one, caught before it shipped:** a raw `requests.HTTPError`
+propagating out of `okta_users.py` would stringify to include the full
+request URL, putting the org hostname into the tool's error text — which
+flows to the MCP client and from there to the model. Fixed by raising a
+sanitized `OktaRequestError` carrying only the HTTP status and Okta's own
+error code, never the URL or response body.
+
+**Finding two, caught after it happened:** while debugging a failing
+lookup, a diagnostic command printed raw HTTP response headers. Okta's
+`Link` header carries the org hostname, so it landed in a chat
+transcript. No credential was exposed — the client ID and private key
+were never involved, and a hostname grants nothing on its own — and
+nothing entered git or any published file. But it was still an
+identifier crossing a boundary I hadn't thought to govern.
+
+**The lesson tying them together:** entry 2's field allowlist governs
+what a tool returns when it succeeds. Neither of these was a successful
+tool response. Error text, HTTP headers, logs, and ad-hoc debugging
+output are all egress paths, and none of them pass through the
+allowlist. Designing the happy path carefully is the easy half.
+
+**The easier path:** treat the allowlist as the egress control and
+consider the problem solved.
+
+**Why that's not enough:** the allowlist only governs output I designed.
+The paths that actually leaked were ones I wasn't looking at — one in
+code I'd written, one in a command I typed while debugging.
+
+**What changed as a result:** sanitized errors are now the pattern for
+anything raised out of the Okta request layer, and diagnostics against a
+live tenant get the same output discipline as tool responses — print
+status codes, key names, and lengths, not raw headers or bodies.
+
+**What this doesn't solve:** this is a practice, not a mechanism.
+Nothing enforces it. A future diagnostic could leak the same way.
