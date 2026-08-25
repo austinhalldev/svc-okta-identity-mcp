@@ -15,8 +15,9 @@ namely tool scoping, read-only enforcement, and preventing reach into data
 the agent shouldn't have.
 
 Sessions: 22 August 2026 (scaffold, decisions 1-3), 23 August 2026 (MCP
-SDK v2 pin, Okta server investigation, journal edits), and 24 August 2026
-(Okta app scoping, first tools, field allowlist).
+SDK v2 pin, Okta server investigation, journal edits), 24 August 2026
+(Okta app scoping, first tools, field allowlist), and 25 August 2026
+(compare_user_groups, tool set finalized).
 
 ---
 
@@ -276,3 +277,92 @@ status codes, key names, and lengths, not raw headers or bodies.
 
 **What this doesn't solve:** this is a practice, not a mechanism.
 Nothing enforces it. A future diagnostic could leak the same way.
+
+### 7. Is an MCP tool even the right answer here?
+
+The honest critique, stated before any defense of this project: any
+single one of these tools, used alone, is roughly console-equivalent at
+best.
+
+**The easier path:** the Okta admin console. A single-user lookup takes
+about two clicks — faster than a tool call, authoritative, and it sends
+nothing anywhere. For "is this person still active," the console beats
+this server outright.
+
+**Where agent mediation actually earns its place:** questions that span
+records — comparing several users' access, or asking which of a set
+still holds something. Those require pulling multiple records and
+reasoning across them, which in the console means opening a stack of
+tabs or exporting users to a spreadsheet, and in practice means the
+comparison gets skipped. The value isn't that any single lookup is
+hard. It's that once the primitives exist, an admin can ask a question
+spanning them and get an answer without the tab-and-spreadsheet detour.
+
+**The portfolio reality, consistent with entry 5:** this was built to
+demonstrate reasoning about agent permissions and data boundaries, not
+because anyone would deploy it. Being a portfolio project explains why
+I built something; it doesn't make this particular something good.
+What makes it worth building is that the governance reasoning
+transfers — field allowlists at the egress boundary, purpose limitation
+across tools, read-only as an architectural property, sanitized error
+paths — to any MCP server wrapping any sensitive system. The Okta
+identity case is the vehicle.
+
+### 8. compare_user_groups: three design decisions
+
+**The cap: 5 users, refuse rather than truncate.** The cap bounds
+per-call egress: five users at fifteen groups each is 75 group records
+plus five identities crossing in one call. It also keeps output within
+what an admin will genuinely verify — past a handful, nobody checks,
+they skim the summary, and the raw output becomes theater. Five is a
+judgment, not a calculation.
+
+**Open question, recorded rather than resolved:** users is the wrong
+unit. Five users in a light tenant is 20 group records; in a heavy one
+it could be 150. A cap on total groups returned would bound egress more
+honestly. Not built, and I'd be guessing at the number.
+
+**The easier path:** truncate silently at the cap.
+
+**Why not:** a truncated comparison is a wrong answer that looks like a
+right one.
+
+**Raw data, no computed diff:** the tool returns each user's core plus
+their group list; it does not compute intersections or "common vs
+unique." Reasoning: trust but verify. A computed summary is
+unverifiable without going back to the console, which defeats the point
+of having raw output at all. The tool reports what Okta said; the model
+compares; the admin can check the comparison against the source.
+
+**Structural failure reporting:** per-user failures are separated from
+results rather than mixed into one list, and the response carries
+requested and returned counts. An error entry sitting in a homogeneous
+list of five is easy for a model to skim past — it summarizes a clean
+four-way comparison and the admin never notices someone's missing. With
+errors in their own key, a model that summarizes results structurally
+cannot include a failed user; with the counts, a mismatch is a scalar
+sitting next to the thing being described, not prose the model has to
+choose to mention.
+
+**Also record:** failure is per-entry, not whole-call, so one typo'd
+login doesn't kill a five-user review. The exception catch is
+deliberately narrow — only the Okta request error and the two
+malformed-response types. Anything else (a real bug) propagates and
+fails the whole call, so a genuine defect can't get quietly
+reclassified as "that one user had a problem."
+
+**One honest note:** the tool's docstring instructs the model not to
+describe the result as a complete N-way comparison unless requested
+equals returned. That's persuasion delivered through the tool
+description — the same category as readOnlyHint, not enforcement.
+Worth naming as a hint rather than presenting it as a control.
+
+### 9. The fourth tool, declined
+
+The original plan was four tools; the fourth was "recent deactivations." It didn't get built.
+
+As specced it's a report of who left recently, and Okta already has reports. A replacement was considered: deactivated users still holding group memberships. The premise is real and documented — per Okta's support article "Okta Does Not Automatically Remove Deactivated Users From Groups," a Group Rule that adds a user to a group isn't re-evaluated on deactivation, so the user stays in the group despite lacking active status.
+
+**The easier path**: build it. The finding is real and the code is an afternoon.
+
+**Why not**: the tool would have to enumerate every deactivated user, then fetch each one's group list. That's the bulk-enumeration egress pattern entry 2 flagged, and the per-call cap from entry 8 doesn't help — you can't cap a "find all instances of X" query without breaking what it does. A tool whose purpose requires unbounded enumeration is in tension with the egress posture the rest of this project is built on. The finding is real; this architecture can't safely surface it.
