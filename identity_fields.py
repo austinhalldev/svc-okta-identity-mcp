@@ -69,3 +69,43 @@ def select_lookup_user_org_context_fields(user: dict) -> dict:
     fields["manager"] = profile.get("manager")
     fields["title"] = profile.get("title")
     return fields
+
+
+def select_user_core_fields(user: dict) -> dict:
+    """Just the identity core, for compare_user_groups -- same _core() the
+    other two selectors use, with nothing added."""
+    return _core(user)
+
+
+class MalformedGroupResponse(RuntimeError):
+    """Raised when an Okta group response is missing a structural field.
+
+    id, name, and type are structural -- Okta always returns them for a
+    valid group, the same way id/status/login/email/firstName/lastName
+    always come back for a valid user. Missing one means a malformed
+    response or a bug, not legitimately-unset data, so this fails loudly
+    the same way MalformedUserResponse does. description, by contrast,
+    is commonly left blank by admins, so its absence is ordinary data,
+    not a defect -- it comes back null, never raises.
+    """
+
+
+def select_group_fields(group: dict) -> dict:
+    """id, name, description, type -- the tool's own group field list.
+
+    Not part of CORE_FIELDS: this is what compare_user_groups needs for
+    a group, not something every tool requires.
+    """
+    profile = group.get("profile") or {}
+    fields = {
+        "id": group.get("id"),
+        "name": profile.get("name"),
+        "description": profile.get("description"),
+        "type": group.get("type"),
+    }
+    missing = [field for field in ("id", "name", "type") if fields[field] is None]
+    if missing:
+        raise MalformedGroupResponse(
+            f"Okta group response is missing required structural field(s): {', '.join(missing)}"
+        )
+    return fields
