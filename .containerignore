@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+private_key.json
+.venv/
+.git/
+docs/
+__pycache__/
+*.pyc
+redact.py
+.devcontainer/
+.gitattributes
+.gitignore
+Containerfile
+.containerignore

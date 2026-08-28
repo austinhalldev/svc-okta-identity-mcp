@@ -5,6 +5,7 @@ named explicitly in identity_fields.py -- see that module for the
 allowlists and the reasoning behind them.
 """
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -28,14 +29,19 @@ from token_cache import TokenCache
 
 MAX_COMPARE_USERS = 5  # refuse above this, never truncate -- see compare_user_groups
 
-HOST = "127.0.0.1"
-# Correct as-is for running server.py directly in the dev container.
-# When this moves into the runtime (Podman) container, the process inside
-# the container must bind 0.0.0.0 -- 127.0.0.1 inside a container is not
-# reachable from the host at all. The loopback restriction then has to be
-# enforced at the port publish step instead: `-p 127.0.0.1:8000:8000`, not
-# `-p 8000:8000`. Don't just flip this constant to 0.0.0.0 without adding
-# that publish flag, or the port opens to every interface on the host.
+HOST = os.environ.get("MCP_HOST", "127.0.0.1")
+# Configurable via MCP_HOST so the same server.py works unmodified in both
+# places this runs. Default stays 127.0.0.1, the safe value, for running
+# server.py directly in the dev container.
+#
+# Inside the runtime (Podman) container, 127.0.0.1 would only be reachable
+# from within that container's own network namespace -- Podman would have
+# nothing to forward the published port to. The runtime container's image
+# sets MCP_HOST=0.0.0.0 explicitly to bind all interfaces inside the
+# container. The loopback restriction is then enforced at the port publish
+# step instead: `-p 127.0.0.1:8000:8000`, not `-p 8000:8000`. Don't publish
+# without the 127.0.0.1 prefix, or the port opens to every interface on the
+# host.
 PORT = 8000  # change this one value to move the server to a different port
 
 
