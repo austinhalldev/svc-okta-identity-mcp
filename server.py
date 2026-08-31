@@ -57,7 +57,7 @@ async def lifespan(server: MCPServer) -> AsyncIterator[AppContext]:
     yield AppContext(org_url=config.org_url, token_cache=TokenCache(config, scope=DEFAULT_SCOPE))
 
 
-mcp = MCPServer("okta-identity-mcp", lifespan=lifespan)
+mcp = MCPServer("okta-identity-mcp", version="0.1.0", lifespan=lifespan)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
