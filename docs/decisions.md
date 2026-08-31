@@ -16,8 +16,9 @@ the agent shouldn't have.
 
 Sessions: 22 August 2026 (scaffold, decisions 1-3), 23 August 2026 (MCP
 SDK v2 pin, Okta server investigation, journal edits), 24 August 2026
-(Okta app scoping, first tools, field allowlist), and 25 August 2026
-(compare_user_groups, tool set finalized).
+(Okta app scoping, first tools, field allowlist), 25 August 2026
+(compare_user_groups, tool set finalized), 27 August 2026 (runtime
+container, Claude Desktop wiring), and 31 August 2026 (journal, README).
 
 ---
 
@@ -366,3 +367,33 @@ As specced it's a report of who left recently, and Okta already has reports. A r
 **The easier path**: build it. The finding is real and the code is an afternoon.
 
 **Why not**: the tool would have to enumerate every deactivated user, then fetch each one's group list. That's the bulk-enumeration egress pattern entry 2 flagged, and the per-call cap from entry 8 doesn't help — you can't cap a "find all instances of X" query without breaking what it does. A tool whose purpose requires unbounded enumeration is in tension with the egress posture the rest of this project is built on. The finding is real; this architecture can't safely surface it.
+
+### 10. The client doesn't speak the transport I chose
+
+Entry 1 picked Streamable HTTP on a loopback-bound port and turned down stdio, because stdio put either the credential or the process lifecycle on the host. That held up everywhere except the client.
+
+Here's what happened.
+
+Claude Desktop took `{"type": "http", "url": "..."}` as valid JSON and then rejected it as an invalid MCP server config. The log just says "Skipped invalid MCP server config entries." No reason given.
+
+Turns out Claude Desktop's local MCP config is stdio only. It launches a process and talks to it over stdin/stdout. There's no HTTP option in that file at all.
+
+The workaround is mcp-remote, a Node proxy that Claude Desktop launches over stdio, which then forwards to the HTTP server. So the path is Claude Desktop → stdio → mcp-remote → HTTP → container.
+
+I also tried the documented stdio form first, command and args, and that got rejected too. The piece I was missing was an explicit `"type": "stdio"` field. The published MCP docs for connecting local servers show command and args with no type field at all. This build wants it, and the error doesn't say so. I found the fix by reading Claude Desktop's own logs, not the documentation.
+
+**What it costs:** entry 1 rejected stdio partly because Claude Desktop would spawn a process on the host. It does that now. That part of entry 1 isn't true anymore.
+
+**What still holds:**
+- The Okta private key never leaves the container. mcp-remote is a network proxy. No credential, no file access.
+- The server still runs where I put it, on a lifecycle I control.
+- Stopping the container still cuts the agent off. I checked: container stopped, tool call fails with a connection error, the model can't answer and doesn't fall back to anything.
+- The proxy adds no tools. Still three, all read-only.
+
+**New exposure I didn't have before:** mcp-remote is third-party code from npm, fetched by npx at launch, running as me on the host. It's widely used, and it's a proxy, not a file tool, but it's still code I didn't write or audit running on my machine. Pinning a version instead of pulling latest would help.
+
+**The easier path:** build for stdio from the start, like Okta's server does. Entry 5 notes theirs calls `run()` with no arguments, which defaults to stdio.
+
+**Why the HTTP decision was still right:** it forced the credential into a container I control the lifecycle of, and the off switch works. The proxy is a compatibility layer on top of a design that's otherwise unchanged. If I'd built for stdio from the start, the key would be sitting on the host.
+
+The lesson: a transport decision isn't just about the server. What the client supports is a constraint on the architecture too. Mine was undocumented in one place and contradicted the docs in another, and I only found that out by actually connecting one.
