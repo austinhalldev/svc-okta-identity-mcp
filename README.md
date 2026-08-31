@@ -4,6 +4,8 @@ An MCP server that exposes read-only Okta identity lookups to an AI client, so a
 
 Design and governance decisions, including what was declined and why, can be found at [docs/decisions.md](docs/decisions.md)
 
+A companion project, [svc-okta-log-triage](https://github.com/austinhalldev/svc-okta-log-triage), governed what data may cross a boundary, pseudonymizing identities before they reached an external model. This one governs a different question: what an agent is permitted to do.
+
 ## The problem
 
 An admin fielding access review questions, things like "was this person offboarded and when" or "does this person's access match their team," answers them by clicking through the Okta console, one user at a time.
